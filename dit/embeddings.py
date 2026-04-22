@@ -20,7 +20,7 @@ class TimestepEmbedder(nn.Module):
     @staticmethod
     def timestep_emb(t, dim, theta=10000):
         """
-            Sin-Cosine positional embeddings that are concatenated one after another (No weaving)
+            Sine-Cosine + learned positional embeddings that are concatenated one after another (No weaving)
         """
         
         # t is a 1 dimensional vector with the timesteps that aren't discrete
@@ -47,13 +47,34 @@ class TimestepEmbedder(nn.Module):
     
 class LabelEmbedder(nn.Module):
     """
-        Embeds the label with sin-cosine positional embeddings
+        Embeds the label with learned positional embeddings
     """
-    def __init__(self, dim=1152):
-        pass
+    def __init__(self, num_labels, dim, dropout):
+        super().__init__()
+        cfg_emb = dropout > 0
+        self.embs = nn.Embedding(num_labels + cfg_emb)
+        self.dim = dim
+        self.dropout = dropout
+        
+        
+    def cfg_filter(self, labels, force_drop_ids=None):
+        """
+            Drop labels and turn them into the classifier free labels
+        """
+        
+        if force_drop_ids == None:
+            drop = torch.rand(labels.shape[0], device = labels.device) < self.dropout
+        else:
+            drop = force_drop_ids == 1
+        
+        labels = torch.where(drop, self.num_classes, labels)
     
-    def forward(self, x):
-        pass
+    def forward(self, labels, train, force_drop_ids=None):
+        drop = self.dropout > 0
+        if (train and drop) or force_drop_ids != None:
+            labels = force_drop_ids(labels, force_drop_ids)
+        
+        return self.embs(labels)
     
     
     
