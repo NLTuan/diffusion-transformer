@@ -52,8 +52,8 @@ class LabelEmbedder(nn.Module):
     def __init__(self, num_labels, dim, dropout):
         super().__init__()
         cfg_emb = dropout > 0
-        self.embs = nn.Embedding(num_labels + cfg_emb)
-        self.dim = dim
+        self.embs = nn.Embedding(num_labels + cfg_emb, dim)
+        self.num_labels = num_labels
         self.dropout = dropout
         
         
@@ -67,12 +67,13 @@ class LabelEmbedder(nn.Module):
         else:
             drop = force_drop_ids == 1
         
-        labels = torch.where(drop, self.num_classes, labels)
+        labels = torch.where(drop, self.num_labels, labels)
+        return labels
     
     def forward(self, labels, train, force_drop_ids=None):
         drop = self.dropout > 0
         if (train and drop) or force_drop_ids != None:
-            labels = force_drop_ids(labels, force_drop_ids)
+            labels = self.cfg_filter(labels, force_drop_ids)
         
         return self.embs(labels)
     
@@ -84,3 +85,7 @@ if __name__ == '__main__':
     timesteps = torch.randn(100)
     
     print(f"Timestep embedding dimension: {time_embs(timesteps).shape}")
+    
+    labels = torch.randint(100, (100,))
+    label_embs = LabelEmbedder(100, 512, 0.2)
+    print(f"Label embedding dimension: {label_embs(labels, True).shape}")
