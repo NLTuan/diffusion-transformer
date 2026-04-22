@@ -4,6 +4,10 @@ from einops import rearrange
 from torch import nn
 
 class Patchify(nn.Module):
+    """
+        Turns an image into a sequence of embedded tokens
+    """
+    
     def __init__(self, 
                  dim=1152, 
                  patch_size=2,
