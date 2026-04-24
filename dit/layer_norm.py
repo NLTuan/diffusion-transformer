@@ -4,9 +4,9 @@ from torch import nn
 
 class LayerNorm(nn.Module):
     
-    def __init__(self, input_shape, eps=0.00001):
+    def __init__(self, hidden_dim, eps=0.00001):
         super().__init__()
-        self.gamma = nn.Parameter(torch.ones(input_shape))
+        self.gamma = nn.Parameter(torch.ones(hidden_dim))
         self.eps = eps
         
     def forward(self, x):
@@ -19,7 +19,7 @@ class LayerNorm(nn.Module):
 if __name__ == "__main__":
     a = torch.rand(1, 23, 128) * 213 + 23
     
-    ln = LayerNorm(a.shape)
+    ln = LayerNorm(a.shape[-1])
     
     print('statistics pre norm')
     print(a.mean(dim=-1))

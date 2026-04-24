@@ -12,19 +12,19 @@ def modulate(x, scale, shift):
 
 
 class DiTBlock(nn.Module):
-    def __init__(self, input_shape, num_heads, dropout=0.1):
+    def __init__(self, hidden_dim, num_heads, dropout=0.1):
         super().__init__()
-        dim = input_shape[-1]
-        self.ln1 = LayerNorm(input_shape, elementwise_affine=False)
+        dim = hidden_dim
+        self.ln1 = LayerNorm(dim, elementwise_affine=False)
         
         self.qkv = nn.Linear(dim, dim * 3)
-        self.mha = MultiheadAttention(dim, num_heads, dropout)
+        self.mha = MultiheadAttention(dim, num_heads, dropout, batch_first=True)
         self.conditionning_mlp = nn.Sequential(
             nn.SiLU(),
             nn.Linear(dim, dim * 6)
         )
         
-        self.ln2 = LayerNorm(input_shape)
+        self.ln2 = LayerNorm(dim)
         self.ffn = nn.Sequential(
             nn.Linear(dim, dim * 4),
             nn.SiLU(),
@@ -44,11 +44,11 @@ class DiTBlock(nn.Module):
     
 
 class FinalLayer(nn.Module):
-    def __init__(self, input_dim, patch_size, out_channels):
+    def __init__(self, hidden_dim, patch_size, out_channels):
         super().__init__()
-        self.ln = nn.LayernNorm(input_dim, elementwise_affine=True)
-        dim = input_dim[-1]
-        self.conditionning_mlp = nn.Linear(
+        dim = hidden_dim
+        self.ln = nn.LayerNorm(dim, elementwise_affine=True)
+        self.conditionning_mlp = nn.Sequential(
             nn.SiLU(),
             nn.Linear(dim, dim * 2)
         )
@@ -56,15 +56,16 @@ class FinalLayer(nn.Module):
         self.mlp = nn.Linear(dim, dim * patch_size * out_channels)
     
     def forward(self, x, cond):
-        shift, scale = self.conditionning_mlp(cond).chunk(2, dim=-1)
-        x = modulate(x, shift, scale)
+        scale, shift = self.conditionning_mlp(cond).chunk(2, dim=-1)
+        x = modulate(x, scale, shift)
         x = self.mlp(x)
+        return x
         
 if __name__ == "__main__":
     cond = torch.randn(3, 128)
     
     latent = torch.randn(3, 23, 128)
     
-    block = DiTBlock(latent.shape, 4)
+    block = DiTBlock(latent.shape[-1], 4)
     
     print(f'Block output shape: {block(latent, cond).shape}')

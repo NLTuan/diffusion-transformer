@@ -36,7 +36,7 @@ class TimestepEmbedder(nn.Module):
         
         # 0 pad if the dimension is odd
         if (dim % 2 != 0):
-            out = torch.cat([out, torch.zeros_like(out[:, 0])], dim=-1)
+            out = torch.cat([out, torch.zeros_like(out[:, :1])], dim=-1)
         
         return out
     
