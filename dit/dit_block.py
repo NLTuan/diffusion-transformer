@@ -41,7 +41,24 @@ class DiTBlock(nn.Module):
         x = res + a1.unsqueeze(1) * self.mha(q, k, v)[0]
         x = x + a2.unsqueeze(1) * self.ffn(modulate(self.ln2(x), g2, b2))
         return x
+    
+
+class FinalLayer(nn.Module):
+    def __init__(self, input_dim, patch_size, out_channels):
+        super().__init__()
+        self.ln = nn.LayernNorm(input_dim, elementwise_affine=True)
+        dim = input_dim[-1]
+        self.conditionning_mlp = nn.Linear(
+            nn.SiLU(),
+            nn.Linear(dim, dim * 2)
+        )
         
+        self.mlp = nn.Linear(dim, dim * patch_size * out_channels)
+    
+    def forward(self, x, cond):
+        shift, scale = self.conditionning_mlp(cond).chunk(2, dim=-1)
+        x = modulate(x, shift, scale)
+        x = self.mlp(x)
         
 if __name__ == "__main__":
     cond = torch.randn(3, 128)
