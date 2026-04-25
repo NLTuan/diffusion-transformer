@@ -33,10 +33,11 @@ class DiT(nn.Module):
     
     def forward(self, x, t, y=None):
         x = self.patchify(x)
-        x = self.time_embedder(x)
-        x = self.label_embedder(x)
+        time_embs = self.time_embedder(t)
+        label_embs = self.label_embedder(y, self.training)
+        cond = time_embs + label_embs
         for block in self.blocks:
-            x = block(x)
+            x = block(x, cond)
         x = self.to_noise(x)
         x = self.unpatchify(x)
         return x
