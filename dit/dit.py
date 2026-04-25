@@ -1,9 +1,9 @@
 import torch
 from torch import nn
 import numpy as np
-from patchify import Patchify, Unpatchify
-from embeddings import TimestepEmbedder, LabelEmbedder
-from dit_block import DiTBlock, FinalLayer
+from .patchify import Patchify, Unpatchify
+from .embeddings import TimestepEmbedder, LabelEmbedder
+from .dit_block import DiTBlock, FinalLayer
 
 class DiT(nn.Module):
     def __init__(
@@ -84,6 +84,16 @@ class DiT(nn.Module):
         x = self.unpatchify(x)
         return x
 
+
+def DiT_teeny_tiny():
+    return DiT(
+        hidden_dim=64,
+        n_blocks=2,
+        patch_size=2,
+        time_emb_dim=256,
+        cfg_dropout=0.1
+    )
+    
 
 def DiT_tiny():
     return DiT(
