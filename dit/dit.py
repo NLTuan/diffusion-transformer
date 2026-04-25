@@ -2,7 +2,7 @@ import torch
 from torch import nn
 from patchify import Patchify, Unpatchify
 from embeddings import TimestepEmbedder, LabelEmbedder
-from dit_block import DiTBlock
+from dit_block import DiTBlock, FinalLayer
 
 class DiT(nn.Module):
     def __init__(
@@ -21,7 +21,7 @@ class DiT(nn.Module):
         self.patchify = Patchify(hidden_dim, patch_size, in_channels)
         self.unpatchify = Unpatchify(patch_size)
 
-        self.time_embedder = TimestepEmbedder(time_emb_dim)
+        self.time_embedder = TimestepEmbedder(hidden_dim, time_emb_dim)
         self.label_embedder = LabelEmbedder(num_labels, hidden_dim, cfg_dropout)
 
         self.blocks = nn.ModuleList([
@@ -29,7 +29,7 @@ class DiT(nn.Module):
             for _ in range(n_blocks)
         ])
 
-        self.to_noise = nn.Linear(hidden_dim, hidden_dim)
+        self.to_noise = FinalLayer(hidden_dim, patch_size, in_channels)
     
     def forward(self, x, t, y=None):
         x = self.patchify(x)
@@ -38,7 +38,7 @@ class DiT(nn.Module):
         cond = time_embs + label_embs
         for block in self.blocks:
             x = block(x, cond)
-        x = self.to_noise(x)
+        x = self.to_noise(x, cond)
         x = self.unpatchify(x)
         return x
 
@@ -90,6 +90,7 @@ if __name__ == "__main__":
 
     print("Number of parameters: ", sum(p.numel() for p in model.parameters()))
 
-    model = DiT_medium()
-
-    print("Number of parameters: ", sum(p.numel() for p in model.parameters()))
+    latent = torch.randn(3, 4, 32, 32)
+    t = torch.randint(0, 1000, (1,))
+    y = torch.randint(0, 10, (1,))
+    print(model(latent, t, y).shape)

@@ -53,7 +53,7 @@ class FinalLayer(nn.Module):
             nn.Linear(dim, dim * 2)
         )
         
-        self.mlp = nn.Linear(dim, dim * patch_size * out_channels)
+        self.mlp = nn.Linear(dim, patch_size * patch_size * out_channels)
     
     def forward(self, x, cond):
         scale, shift = self.conditionning_mlp(cond).chunk(2, dim=-1)
