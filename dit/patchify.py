@@ -17,7 +17,7 @@ class Patchify(nn.Module):
         
         super().__init__()
         self.proj = nn.Conv2d(in_channels, dim, patch_size, stride=patch_size)
-        
+
     def forward(self, x):
         x = self.proj(x) # (B, C, W, H) -> (B, hidden_dim, w // patch_size, h // patch_size)
         return rearrange(x, 'b d h w -> b (h w) d') # (B, "seq_len", hidden_dim)
