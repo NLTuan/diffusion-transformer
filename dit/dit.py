@@ -85,52 +85,56 @@ class DiT(nn.Module):
         return x
 
 
-def DiT_teeny_tiny():
+def DiT_teeny_tiny(**kwargs):
     return DiT(
         hidden_dim=64,
         n_blocks=2,
         patch_size=2,
         time_emb_dim=256,
-        cfg_dropout=0.1
+        cfg_dropout=0.1,
+        **kwargs
     )
     
 
-def DiT_tiny():
+def DiT_tiny(**kwargs):
     return DiT(
         hidden_dim=192,
         n_blocks=6,
         patch_size=2,
         time_emb_dim=256,
-        cfg_dropout=0.1
+        cfg_dropout=0.1,
+        **kwargs
     )
 
-def DiT_small():
+def DiT_small(**kwargs):
     return DiT(
         hidden_dim=384,
         n_blocks=12,
         patch_size=2,
         time_emb_dim=256,
-        cfg_dropout=0.1
+        cfg_dropout=0.1,
+        **kwargs
     )
 
-def DiT_medium():
+def DiT_medium(**kwargs):
     return DiT(
         hidden_dim=768,
         n_blocks=24,
         patch_size=2,
         time_emb_dim=256,
-        cfg_dropout=0.1
+        cfg_dropout=0.1,
+        **kwargs
     )
 
-def DiT_large():
+def DiT_large(**kwargs):
     return DiT(
         hidden_dim=1152,
         n_blocks=28,
         patch_size=2,
         time_emb_dim=256,
-        cfg_dropout=0.1
+        cfg_dropout=0.1,
+        **kwargs
     )
-
 
 
 #################################################################################
