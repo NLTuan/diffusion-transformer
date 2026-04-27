@@ -21,6 +21,7 @@ class TrainingConfig:
     num_workers: int = 4
     output_dir: str = "mnist_dit_checkpoints"
     save_model_epochs: int = 5
+    objective: str = "ddpm" # 'ddpm' or 'flow_matching'
 
 class DDPMScheduler:
     """A minimal DDPMScheduler for the forward diffusion process."""
@@ -116,22 +117,47 @@ def main():
             labels = labels.to(device)
             
             # Sample noise
-            noise = torch.randn_like(clean_images)
-            
-            # Sample random timesteps
             bsz = clean_images.shape[0]
-            timesteps = torch.randint(0, noise_scheduler.num_timesteps, (bsz,), device=device).long()
-            
-            # Add noise to clean images
-            noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
+
+            if config.objective == "ddpm":
+                noise = torch.randn_like(clean_images)
+                
+                # Sample random timesteps
+                timesteps = torch.randint(0, noise_scheduler.num_timesteps, (bsz,), device=device).long()
+                
+                # Add noise to clean images
+                noisy_images = noise_scheduler.add_noise(clean_images, noise, timesteps)
+                
+                # Target for DDPM/DDIM is the added noise (epsilon prediction)
+                target = noise
+            elif config.objective == "flow_matching":
+                # 1. Sample target noise
+                noise = torch.randn_like(clean_images)
+
+                # 2. Sample continuous timesteps (t as a float between 0.0 and 1.0)
+                t_continuous = torch.rand((bsz,), device=device)
+                
+                # We scale t up by 1000 so the DiT timestep embeddings can process it properly
+                timesteps = (t_continuous * 1000).long()
+
+                # Reshape t for broadcasting -> shape becomes (bsz, 1, 1, 1)
+                t_expanded = t_continuous.view(bsz, 1, 1, 1)
+
+                # 3. Create linear interpolation for the noisy images
+                noisy_images = (1.0 - t_expanded) * clean_images + t_expanded * noise
+
+                # 4. Target is the velocity pointing from clean_image to noise
+                target = noise - clean_images
+            else:
+                raise ValueError(f"Unknown training objective: {config.objective}")
             
             optimizer.zero_grad()
             
             # Predict
             with torch.autocast(device_type="cuda" if device=="cuda" else "cpu", dtype=dtype, enabled=use_amp):
-                # Our DiT outputs the predicted noise
-                noise_pred = model(noisy_images, timesteps, y=labels)
-                loss = loss_fn(noise_pred, noise)
+                # Our DiT outputs either predicted noise (DDPM) or vector field (Flow Matching)
+                pred = model(noisy_images, timesteps, y=labels)
+                loss = loss_fn(pred, target)
                 
             # Backpropagate
             scaler.scale(loss).backward()
