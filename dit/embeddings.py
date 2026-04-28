@@ -27,8 +27,8 @@ class TimestepEmbedder(nn.Module):
         half = dim // 2
         
         freqs = torch.exp(
-            -math.log(theta) * torch.arange(start=0, end=half, dtype=torch.float32) / half
-        ).to(t.device) # Shape = (dim/2)
+            -math.log(theta) * torch.arange(start=0, end=half, dtype=torch.float32, device=t.device) / half
+        ) # Shape = (dim/2)
         
         args = t[:, None] * freqs[None] # (t, 1) * (1, dim/2) = (t, dim/2)
         
