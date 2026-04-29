@@ -32,3 +32,6 @@ To train the model on a dataset, run the appropriate training script from the ro
   ```
 
 Model generation sample scripts are also available, ensuring the environment is activated.
+
+
+NOTE: the pyproject.toml is set to cuda 12.1 since that's as far as my vastai instance goes ;.;
