@@ -18,7 +18,7 @@ class DDIMScheduler:
         """Sets the discrete timesteps used for the inference loop."""
         self.num_inference_steps = num_inference_steps
         step_ratio = self.num_train_timesteps // self.num_inference_steps
-        timesteps = (torch.arange(0, num_inference_steps) * step_ratio).round()[::-1].long()
+        timesteps = torch.flip((torch.arange(0, num_inference_steps) * step_ratio).round(), dims=[0]).long()
         self.timesteps = timesteps.to(self.device)
         
     def step(self, model_output, timestep, sample):

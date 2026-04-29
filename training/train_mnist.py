@@ -15,16 +15,16 @@ class TrainingConfig:
     image_size: int = 32
     in_channels: int = 1
     batch_size: int = 128
-    num_epochs: int = 20
+    num_epochs: int = 10
     learning_rate: float = 2e-4
     weight_decay: float = 1e-4
     num_timesteps: int = 1000
     mixed_precision: str = "fp16" # 'no', 'fp16', 'bf16'
     num_workers: int = 4
-    output_dir: str = "mnist_dit_checkpoints"
-    save_model_epochs: int = 5
-    objective: str = "ddpm" # 'ddpm' or 'flow_matching'
-    hf_repo_id: str = None # e.g., 'username/my-mnist-dit'
+    output_dir: str = "./outputs/mnist_dit_checkpoints_flow"
+    save_model_epochs: int = 2
+    objective: str = "flow_matching" # 'ddpm' or 'flow_matching'
+    hf_repo_id: str = "NLTuan/mnist_dit_flow" # e.g., 'username/my-mnist-dit'
 
 class DDPMScheduler:
     """A minimal DDPMScheduler for the forward diffusion process."""
@@ -59,7 +59,7 @@ class DDIMScheduler:
         """Sets the discrete timesteps used for the inference loop."""
         self.num_inference_steps = num_inference_steps
         step_ratio = self.num_train_timesteps // self.num_inference_steps
-        timesteps = (torch.arange(0, num_inference_steps) * step_ratio).round()[::-1].long()
+        timesteps = torch.flip((torch.arange(0, num_inference_steps) * step_ratio).round(), dims=[0]).long()
         self.timesteps = timesteps.to(self.device)
         
     def step(self, model_output, timestep, sample):
@@ -258,6 +258,10 @@ def main():
                 try:
                     from huggingface_hub import HfApi
                     api = HfApi()
+                    
+                    # Ensure the repository exists before pushing
+                    api.create_repo(repo_id=config.hf_repo_id, exist_ok=True)
+                    
                     api.upload_file(
                         path_or_fileobj=model_path,
                         path_in_repo=f"model_epoch_{epoch+1}.pt",
