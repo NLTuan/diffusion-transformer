@@ -99,7 +99,7 @@ def DiT_teeny_tiny(**kwargs):
 def DiT_tiny(**kwargs):
     return DiT(
         hidden_dim=192,
-        n_blocks=6,
+        n_blocks=8,
         patch_size=2,
         time_emb_dim=256,
         cfg_dropout=0.1,

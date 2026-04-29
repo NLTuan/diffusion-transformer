@@ -7,6 +7,8 @@ from dit.dit import DiT_tiny
 import os
 from tqdm import tqdm
 from dataclasses import dataclass
+from torchvision.utils import make_grid
+from PIL import Image
 
 @dataclass
 class TrainingConfig:
@@ -22,6 +24,7 @@ class TrainingConfig:
     output_dir: str = "cifar10_dit_checkpoints"
     save_model_epochs: int = 10
     objective: str = "ddpm" # 'ddpm' or 'flow_matching'
+    hf_repo_id: str = None # e.g., 'username/my-cifar10-dit'
 
 class DDPMScheduler:
     """A minimal DDPMScheduler for the forward diffusion process."""
@@ -42,6 +45,76 @@ class DDPMScheduler:
         
         noisy_samples = sqrt_alpha_cumprod * original_samples + sqrt_one_minus_alpha_cumprod * noise
         return noisy_samples
+
+class DDIMScheduler:
+    """A minimal DDIMScheduler for inference."""
+    def __init__(self, num_train_timesteps=1000, beta_start=0.0001, beta_end=0.02, device="cpu"):
+        self.num_train_timesteps = num_train_timesteps
+        self.device = device
+        self.betas = torch.linspace(beta_start, beta_end, num_train_timesteps).to(device)
+        self.alphas = 1.0 - self.betas
+        self.alphas_cumprod = torch.cumprod(self.alphas, dim=0)
+        
+    def set_timesteps(self, num_inference_steps):
+        """Sets the discrete timesteps used for the inference loop."""
+        self.num_inference_steps = num_inference_steps
+        step_ratio = self.num_train_timesteps // self.num_inference_steps
+        timesteps = (torch.arange(0, num_inference_steps) * step_ratio).round()[::-1].long()
+        self.timesteps = timesteps.to(self.device)
+        
+    def step(self, model_output, timestep, sample):
+        """DDIM step."""
+        prev_timestep = timestep - self.num_train_timesteps // self.num_inference_steps
+        alpha_prod_t = self.alphas_cumprod[timestep]
+        alpha_prod_t_prev = self.alphas_cumprod[prev_timestep] if prev_timestep >= 0 else torch.tensor(1.0, device=self.device)
+        pred_original_sample = (sample - torch.sqrt(1 - alpha_prod_t) * model_output) / torch.sqrt(alpha_prod_t)
+        pred_sample_direction = torch.sqrt(1 - alpha_prod_t_prev) * model_output
+        prev_sample = torch.sqrt(alpha_prod_t_prev) * pred_original_sample + pred_sample_direction
+        return prev_sample
+
+@torch.no_grad()
+def evaluate_and_save_video(model, config, epoch, device):
+    model.eval()
+    batch_size = 16
+    labels = torch.randint(0, 10, (batch_size,), device=device)
+    image = torch.randn((batch_size, config.in_channels, config.image_size, config.image_size), device=device)
+    frames = []
+    
+    if config.objective == "ddpm":
+        scheduler = DDIMScheduler(num_train_timesteps=config.num_timesteps, device=device)
+        num_inference_steps = 50
+        scheduler.set_timesteps(num_inference_steps)
+        for t in scheduler.timesteps:
+            timesteps_vec = torch.full((batch_size,), t, device=device, dtype=torch.long)
+            noise_pred = model(image, timesteps_vec, y=labels)
+            image = scheduler.step(noise_pred, t, image)
+            grid = make_grid((image / 2 + 0.5).clamp(0, 1), nrow=4)
+            ndarr = grid.mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
+            frames.append(Image.fromarray(ndarr))
+    elif config.objective == "flow_matching":
+        num_inference_steps = 50
+        t_steps = torch.linspace(1.0, 0.0, num_inference_steps + 1, device=device)
+        for i in range(num_inference_steps):
+            t_current = t_steps[i]
+            t_next = t_steps[i+1]
+            dt = t_next - t_current
+            timesteps_vec = (torch.full((batch_size,), t_current, device=device) * 1000).long()
+            v_pred = model(image, timesteps_vec, y=labels)
+            image = image + v_pred * dt
+            grid = make_grid((image / 2 + 0.5).clamp(0, 1), nrow=4)
+            ndarr = grid.mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
+            frames.append(Image.fromarray(ndarr))
+            
+    if frames:
+        gif_path = os.path.join(config.output_dir, f"denoising_epoch_{epoch}.gif")
+        frames[0].save(
+            gif_path, save_all=True, append_images=frames[1:], duration=100, loop=0
+        )
+        print(f"Saved evaluation video to {gif_path}")
+        model.train()
+        return gif_path
+    model.train()
+    return None
 
 class CIFAR10Dataset(torch.utils.data.Dataset):
     """Wrapper to properly transform HF Dataset."""
@@ -171,8 +244,32 @@ def main():
         print(f"Epoch {epoch+1} finished. Average Loss: {avg_loss:.4f}")
         
         if (epoch + 1) % config.save_model_epochs == 0:
-            torch.save(model.state_dict(), os.path.join(config.output_dir, f"model_epoch_{epoch+1}.pt"))
-            print(f"Saved model to {config.output_dir}/model_epoch_{epoch+1}.pt")
+            model_path = os.path.join(config.output_dir, f"model_epoch_{epoch+1}.pt")
+            torch.save(model.state_dict(), model_path)
+            print(f"Saved model to {model_path}")
+            
+            # Evaluate and save video
+            gif_path = evaluate_and_save_video(model, config, epoch+1, device)
+            
+            if config.hf_repo_id and gif_path:
+                try:
+                    from huggingface_hub import HfApi
+                    api = HfApi()
+                    api.upload_file(
+                        path_or_fileobj=model_path,
+                        path_in_repo=f"model_epoch_{epoch+1}.pt",
+                        repo_id=config.hf_repo_id,
+                        repo_type="model"
+                    )
+                    api.upload_file(
+                        path_or_fileobj=gif_path,
+                        path_in_repo=f"denoising_epoch_{epoch+1}.gif",
+                        repo_id=config.hf_repo_id,
+                        repo_type="model"
+                    )
+                    print(f"Pushed model and video to Hugging Face Hub ({config.hf_repo_id})")
+                except Exception as e:
+                    print(f"Failed to push to Hugging Face Hub: {e}")
 
 if __name__ == "__main__":
     main()
